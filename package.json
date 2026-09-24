@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "sync-release": "npm run build && node scripts/sync-release.mjs",
+    "check-release": "node scripts/check-release.mjs",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run && node scripts/check-release.mjs"
   },
   "dependencies": {
     "@fontsource/cormorant-garamond": "^5.2.8",

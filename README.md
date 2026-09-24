@@ -4,6 +4,78 @@ A small browser game of Bible stories. Good characters and evil characters, draw
 
 The starter roster and the starter levels are a broad sample, not a complete cast of Scripture.
 
+## Run on a Raspberry Pi
+
+The Pi does not need Node.js. A production build is already committed in `release/`. Raspberry Pi OS includes Python 3, which is all the launcher uses. The files are plain HTML, CSS, and JavaScript, so this works on a Pi 4 or 5 and on a Pi 3, including a 32-bit OS.
+
+```bash
+git clone https://github.com/nibrocsolutions/good-vs-evil.git
+cd good-vs-evil
+./run-on-pi.sh
+```
+
+The script prints two kinds of address:
+
+- `http://127.0.0.1:8080/` on the Pi itself
+- `http://<lan-ip>:8080/` for a phone or another computer on the same network
+
+Stop it with Ctrl+C. Choose another port with `./run-on-pi.sh --port 9000`.
+
+If `./run-on-pi.sh` says permission denied, run `chmod +x run-on-pi.sh` once. Git normally keeps that bit set.
+
+### Fullscreen on the Pi desktop
+
+```bash
+./run-on-pi.sh --kiosk
+```
+
+When a desktop session is running, that also opens Chromium in fullscreen. Install it if needed:
+
+```bash
+sudo apt install chromium
+```
+
+If no desktop is logged in, the script still serves the game and prints the URL.
+
+### Start on boot
+
+```bash
+./run-on-pi.sh --install-service
+```
+
+This installs a systemd service named `good-vs-evil` (it will ask for your password) and starts it. Add fullscreen at login as well:
+
+```bash
+./run-on-pi.sh --install-service --kiosk
+```
+
+Remove both with `./run-on-pi.sh --uninstall-service`.
+
+### Update
+
+On the Pi, from the repo directory:
+
+```bash
+./run-on-pi.sh --update
+```
+
+That runs `git pull` and restarts the service if you installed it. If you started the game in a terminal instead, stop it with Ctrl+C and run `./run-on-pi.sh` again.
+
+### Troubleshooting
+
+- **Port already in use.** Something else is bound to 8080. Run `./run-on-pi.sh --port 8081`, or find the old process with `ss -ltnp | grep 8080`.
+- **Finding the IP.** Run `hostname -I`. Use the first address that is not `127.0.0.1`, for example `http://192.168.1.40:8080/`.
+- **The page is blank.** Open the URL the script printed, not a file path. Hard-refresh the browser. The launcher serves `release/` as the site root.
+- **Chromium does not fill the screen.** The game is still at the printed URL. Install `chromium` (the command above) and run `./run-on-pi.sh --kiosk` from a desktop terminal.
+
+The same static files can be served without the script:
+
+```bash
+python3 -m http.server 8080 --bind 0.0.0.0 --directory release
+```
+
+The launcher is that idea, plus LAN addresses, kiosk mode, and MIME types for JavaScript modules and fonts.
+
 Battles are dramatizations. The story text says what the passage actually records when a scene is not a duel, when someone is spared, or when a king is humbled rather than killed. Jesus Christ and Mary are on the roster as honored story figures and are not combatants.
 
 ## Stack
@@ -16,17 +88,25 @@ Scripture citations use the book names of current English Catholic Bibles such a
 
 ```bash
 npm install
-npm run dev      # local play
-npm test         # data checks and a scripted fight of every level
-npm run build    # typecheck and static build
-npm run preview  # serve the build
+npm run dev           # local play
+npm test              # data checks, plus a check that release/ matches this source
+npm run build         # typecheck and write dist/ (gitignored)
+npm run sync-release  # rebuild and copy dist/ over the committed release/ folder
+npm run preview       # serve dist/
 ```
+
+After you change code or game data, run `npm run sync-release` and commit `release/` with the source change. `npm test` rebuilds into a temporary folder and fails if those files differ from `release/`. Do not edit `release/` by hand.
 
 Progress is stored in `localStorage` under `good-vs-evil.progress.v1`. The first story is open. Finishing a story unlocks the next one. Reset lives at the bottom of the story list.
 
 ## Project structure
 
 ```
+run-on-pi.sh                 # Pi launcher (Python static server)
+release/                     # committed production build the Pi serves
+scripts/serve_release.py     # standard-library server used by the launcher
+scripts/sync-release.mjs     # copy dist/ to release/
+scripts/check-release.mjs    # fail if release/ is stale
 index.html
 src/main.tsx                 # app entry
 src/App.tsx                  # hash routes: #/roster, #/levels, #/story/…, #/battle/…/…
