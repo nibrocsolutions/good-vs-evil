@@ -4,7 +4,7 @@ services:
     image: good-vs-evil:local
     container_name: good-vs-evil
     ports:
-      - "${PORT:-8080}:80"
+      - "${PORT:-8095}:80"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]

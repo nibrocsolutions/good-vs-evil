@@ -4,13 +4,13 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RELEASE="$ROOT/release"
-PORT="${PORT:-8080}"
+PORT="${PORT:-8095}"
 KIOSK=0
 ACTION="serve"
 
 usage() {
   cat <<'EOF'
-Usage: ./run-on-pi.sh [--port 8080] [--kiosk] [--install-service] [--update]
+Usage: ./run-on-pi.sh [--port 8095] [--kiosk] [--install-service] [--update]
 
   Serve the game (default)     python3 only; prints this Pi's URLs
   --port N                     listen on port N (or set PORT=N)
