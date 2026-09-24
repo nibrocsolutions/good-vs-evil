@@ -1,0 +1,11 @@
+.git
+.github
+node_modules
+dist
+.release-check
+coverage
+src
+public
+*.md
+*.log
+.DS_Store

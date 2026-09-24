@@ -18,7 +18,9 @@ Usage: ./run-on-pi.sh [--port 8080] [--kiosk] [--install-service] [--update]
   --install-service            install a systemd service that starts the game on boot
   --install-service --kiosk    also open Chromium fullscreen when the desktop logs in
   --uninstall-service          remove that systemd service
-  --update                     git pull, then restart the service if it is installed
+  --docker                     build and start the Docker container (survives reboot)
+  --docker --kiosk             same, and open Chromium fullscreen if a desktop is running
+  --update                     git pull, then restart the service or rebuild the container
 
 Open the printed URL in a browser on this Pi or on another device on the same network.
 EOF
@@ -48,6 +50,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --update)
       ACTION="update"
+      shift
+      ;;
+    --docker)
+      ACTION="docker"
       shift
       ;;
     -h|--help)
@@ -168,16 +174,49 @@ uninstall_service() {
   rm -f "$HOME/.config/autostart/good-vs-evil.desktop"
 }
 
+docker_running() {
+  command -v docker >/dev/null 2>&1 || return 1
+  docker compose -f "$ROOT/compose.yaml" ps --status running -q 2>/dev/null | grep -q .
+}
+
 update_repo() {
   echo "Pulling the latest commit in $ROOT"
   git -C "$ROOT" pull --ff-only
+  local restarted=0
   if service_installed; then
     echo "Restarting good-vs-evil.service"
     sudo systemctl restart good-vs-evil.service
+    restarted=1
+  fi
+  if docker_running; then
+    echo "Rebuilding the Docker container"
+    PORT="$PORT" docker compose -f "$ROOT/compose.yaml" up -d --build
+    restarted=1
+  fi
+  if [[ "$restarted" -eq 1 ]]; then
     echo "Updated and restarted."
     print_urls
   else
     echo "Updated. Start it with: ./run-on-pi.sh"
+    echo "Or, with Docker: ./run-on-pi.sh --docker"
+  fi
+}
+
+serve_docker() {
+  require_release
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "Docker is not installed." >&2
+    echo "On Raspberry Pi OS, install it with the steps in the README under \"Run with Docker\"." >&2
+    exit 1
+  fi
+  echo "Building and starting the container. It restarts on boot unless you stop it."
+  PORT="$PORT" docker compose -f "$ROOT/compose.yaml" up -d --build
+  echo "Good vs. Evil (Docker)"
+  print_urls
+  echo "Logs: docker compose logs -f"
+  echo "Stop: docker compose down"
+  if [[ "$KIOSK" -eq 1 ]]; then
+    open_kiosk
   fi
 }
 
@@ -227,4 +266,5 @@ case "$ACTION" in
   install) install_service ;;
   uninstall) uninstall_service ;;
   update) update_repo ;;
+  docker) serve_docker ;;
 esac
