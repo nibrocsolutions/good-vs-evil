@@ -1,0 +1,14 @@
+services:
+  game:
+    build: .
+    image: good-vs-evil:local
+    container_name: good-vs-evil
+    ports:
+      - "${PORT:-8095}:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s

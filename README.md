@@ -16,8 +16,8 @@ cd good-vs-evil
 
 The script prints two kinds of address:
 
-- `http://127.0.0.1:8080/` on the Pi itself
-- `http://<lan-ip>:8080/` for a phone or another computer on the same network
+- `http://127.0.0.1:8095/` on the Pi itself
+- `http://<lan-ip>:8095/` for a phone or another computer on the same network
 
 Stop it with Ctrl+C. Choose another port with `./run-on-pi.sh --port 9000`.
 
@@ -43,7 +43,7 @@ If no desktop is logged in, the script still serves the game and prints the URL.
 ./run-on-pi.sh --install-service
 ```
 
-This installs a systemd service named `good-vs-evil` (it will ask for your password) and starts it. Add fullscreen at login as well:
+This installs a systemd service named `good-vs-evil` (it will ask for your password) and starts it on port 8095. If you installed that service earlier, run the command again so the unit picks up 8095. Add fullscreen at login as well:
 
 ```bash
 ./run-on-pi.sh --install-service --kiosk
@@ -63,18 +63,83 @@ That runs `git pull` and restarts the service if you installed it. If you starte
 
 ### Troubleshooting
 
-- **Port already in use.** Something else is bound to 8080. Run `./run-on-pi.sh --port 8081`, or find the old process with `ss -ltnp | grep 8080`.
-- **Finding the IP.** Run `hostname -I`. Use the first address that is not `127.0.0.1`, for example `http://192.168.1.40:8080/`.
+- **Port already in use.** Something else is bound to 8095. Run `./run-on-pi.sh --port 8096`, or find the old process with `ss -ltnp | grep 8095`.
+- **Finding the IP.** Run `hostname -I`. Use the first address that is not `127.0.0.1`, for example `http://192.168.1.40:8095/`.
 - **The page is blank.** Open the URL the script printed, not a file path. Hard-refresh the browser. The launcher serves `release/` as the site root.
 - **Chromium does not fill the screen.** The game is still at the printed URL. Install `chromium` (the command above) and run `./run-on-pi.sh --kiosk` from a desktop terminal.
 
 The same static files can be served without the script:
 
 ```bash
-python3 -m http.server 8080 --bind 0.0.0.0 --directory release
+python3 -m http.server 8095 --bind 0.0.0.0 --directory release
 ```
 
 The launcher is that idea, plus LAN addresses, kiosk mode, and MIME types for JavaScript modules and fonts.
+
+## Run with Docker on a Raspberry Pi
+
+Docker serves the same committed `release/` build, through nginx. The image does not compile the game, so the build on the Pi is a copy onto `nginx:alpine`. That image publishes arm64 (Pi 4 and Pi 5, 64-bit OS) and arm/v7 (32-bit Pi OS, including many Pi 3 boards). The container uses `restart: unless-stopped`, so it comes back after a reboot as long as Docker itself starts on boot (the install below does that).
+
+You can keep using `./run-on-pi.sh` with no Docker. Do not run both at once on port 8095.
+
+### Install Docker
+
+On Raspberry Pi OS, use Docker's convenience script, then let your user run it without `sudo`:
+
+```bash
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker "$USER"
+```
+
+Log out and back in (or reboot) so the `docker` group applies. Check with `docker info`. The script also installs the `docker compose` plugin.
+
+### Start the game
+
+```bash
+git clone https://github.com/nibrocsolutions/good-vs-evil.git
+cd good-vs-evil
+docker compose up -d --build
+```
+
+The same start, plus the Pi and LAN addresses printed for you:
+
+```bash
+./run-on-pi.sh --docker
+```
+
+Open `http://127.0.0.1:8095/` on the Pi, or `http://<lan-ip>:8095/` from another device. Find the address with `hostname -I`. Another port:
+
+```bash
+PORT=9000 docker compose up -d --build
+```
+
+Fullscreen when a desktop is logged in: `./run-on-pi.sh --docker --kiosk`
+
+### Logs, stop, update
+
+```bash
+docker compose logs -f
+docker compose down
+```
+
+`docker compose down` stops the container and it will not return until you start it again. A reboot does not do that; `unless-stopped` only skips containers you stopped yourself.
+
+After this repo changes on GitHub:
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+If you started with `./run-on-pi.sh --docker`, `./run-on-pi.sh --update` pulls and rebuilds the running container.
+
+### Troubleshooting
+
+- **Port already in use.** The Python launcher or another program is on 8095. Stop it, or run `PORT=8096 docker compose up -d --build`. See what is bound with `ss -ltnp | grep 8095`.
+- **Permission denied on the Docker socket.** `docker` says it cannot connect to `/var/run/docker.sock`. Your user is not in the `docker` group yet, or the login session started before `usermod`. Log out and back in. Until then, `sudo docker compose up -d --build` works. Do not chmod the socket.
+- **`docker compose` is not found.** Re-run the install script above. It installs the Compose plugin. The older `docker-compose` command is not required.
+- **The page is blank.** Open the URL, not a file path. `docker compose ps` should show `good-vs-evil` as healthy. `docker compose logs` shows nginx errors.
 
 Battles are dramatizations. The story text says what the passage actually records when a scene is not a duel, when someone is spared, or when a king is humbled rather than killed. Jesus Christ and Mary are on the roster as honored story figures and are not combatants.
 
@@ -102,7 +167,10 @@ Progress is stored in `localStorage` under `good-vs-evil.progress.v1`. The first
 ## Project structure
 
 ```
-run-on-pi.sh                 # Pi launcher (Python static server)
+run-on-pi.sh                 # Pi launcher (Python, or --docker)
+Dockerfile                   # nginx:alpine image that copies release/
+compose.yaml                 # host port 8095, restart unless stopped
+docker/nginx.conf            # gzip, cache, MIME types
 release/                     # committed production build the Pi serves
 scripts/serve_release.py     # standard-library server used by the launcher
 scripts/sync-release.mjs     # copy dist/ to release/
